@@ -20,34 +20,50 @@ inputs:
   latest:
     description: "Download the latest release"
     required: false
-    default: "true"
+    default: true
+  debug:
+    description: "Enable debug output"
+    required: false
+    default: false
 outputs:
   file:
     description: "The downloaded file"
+    value: ${{ steps.download.outputs.file }}
 runs:
   using: "composite"
   steps:
     - name: "Download release"
       id: download
       run: |
-        if (${{ github.event.inputs.latest }} -eq 'true') {
-          $latestReleaseUrl = "${{ github.event.inputs.api_url }}/repos/${{ github.event.inputs.repository }}/releases/latest"
-          $latestRelease = Invoke-RestMethod -Uri $latestReleaseUrl -Headers @{ Authorization = "token ${{ github.event.inputs.token }}" }
-          $releaseTag = $latestRelease.tag_name
-        } else {
-          $releaseTag = ${{ github.event.inputs.release }}
+        if ("${{ inputs.debug }}" -eq $true) {
+          echo "Inputs:"
+          echo "repository: ${{ inputs.repository }}"
+          echo "api_url: ${{ inputs.api_url }}"
+          echo "token: ${{ inputs.token }}"
+          echo "filename: ${{ inputs.filename }}"
+          echo "release: ${{ inputs.release }}"
+          echo "latest: ${{ inputs.latest }}"
         }
         
-        $downloadUrl = "${{ github.event.inputs.api_url }}/repos/${{ github.event.inputs.repository }}/releases/tags/$releaseTag"
+
+        if ("${{ inputs.latest }}" -eq $true) {
+          $latestReleaseUrl = "${{ inputs.api_url }}/repos/${{ inputs.repository }}/releases/latest"
+          $latestRelease = Invoke-RestMethod -Uri $latestReleaseUrl -Headers @{ Authorization = "token ${{ inputs.token }}" }
+          $releaseTag = $latestRelease.tag_name
+        } else {
+          $releaseTag = "${{ inputs.release }}"
+        }
+        
+        $downloadUrl = "${{ inputs.api_url }}/repos/${{ inputs.repository }}/releases/tags/$releaseTag"
         echo "Downloading from $downloadUrl"
-        $reponse = Invoke-RestMethod -Uri $downloadUrl -Headers @{ Authorization = "token ${{ github.event.inputs.token }}" }
-        $asset = $reponse.assets | Where-Object { $_.name -eq ${{ github.event.inputs.filename }} }
+        $reponse = Invoke-RestMethod -Uri $downloadUrl -Headers @{ Authorization = "token ${{ inputs.token }}" }
+        $asset = $reponse.assets | Where-Object { $_.name -eq "${{ inputs.filename }}" }
         $downloadLink = $asset.browser_download_url
         if ($asset -eq $null) {
           echo "Asset not found"
           exit 1
         }
         echo "Downloading $downloadLink"
-        Invoke-WebRequest -Uri $downloadLink -Headers @{ Authorization = "token ${{ github.event.inputs.token }}" } -OutFile ${{ github.workspace }}/${{ github.event.inputs.filename }}
-        ${{ steps.download.outputs.file }} = ${{ github.workspace }}/${{ github.event.inputs.filename }}
+        Invoke-WebRequest -Uri $downloadLink -Headers @{ Authorization = "token ${{ inputs.token }}" } -OutFile "${{ github.workspace }}/${{ inputs.filename }}"
+        echo "::set-output name=file::${{ github.workspace }}/${{ inputs.filename }}"
       shell: pwsh
