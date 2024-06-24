@@ -1,0 +1,53 @@
+name: "Gitea Release Downloader"
+description: "Download a release from a Gitea repository"
+inputs:
+  repository:
+    description: "The Gitea repository formatted as 'owner/repo'"
+    required: true
+  api_url:
+    description: "The Gitea API URL (e.g. https://gitea.com/api/v1)"
+    required: true
+  token:
+    description: "The Gitea API token"
+    required: true
+  filename:
+    description: "The file to download"
+    required: true
+  release:
+    description: "The release tag to download"
+    required: false
+    default: ""
+  latest:
+    description: "Download the latest release"
+    required: false
+    default: "true"
+outputs:
+  file:
+    description: "The downloaded file"
+runs:
+  using: "composite"
+  steps:
+    - name: "Download release"
+      id: download
+      run: |
+        if (${{ github.event.inputs.latest }} -eq 'true') {
+          $latestReleaseUrl = "${{ github.event.inputs.api_url }}/repos/${{ github.event.inputs.repository }}/releases/latest"
+          $latestRelease = Invoke-RestMethod -Uri $latestReleaseUrl -Headers @{ Authorization = "token ${{ github.event.inputs.token }}" }
+          $releaseTag = $latestRelease.tag_name
+        } else {
+          $releaseTag = ${{ github.event.inputs.release }}
+        }
+        
+        $downloadUrl = "${{ github.event.inputs.api_url }}/repos/${{ github.event.inputs.repository }}/releases/tags/$releaseTag"
+        echo "Downloading from $downloadUrl"
+        $reponse = Invoke-RestMethod -Uri $downloadUrl -Headers @{ Authorization = "token ${{ github.event.inputs.token }}" }
+        $asset = $reponse.assets | Where-Object { $_.name -eq ${{ github.event.inputs.filename }} }
+        $downloadLink = $asset.browser_download_url
+        if ($asset -eq $null) {
+          echo "Asset not found"
+          exit 1
+        }
+        echo "Downloading $downloadLink"
+        Invoke-WebRequest -Uri $downloadLink -Headers @{ Authorization = "token ${{ github.event.inputs.token }}" } -OutFile ${{ github.workspace }}/${{ github.event.inputs.filename }}
+        ${{ steps.download.outputs.file }} = ${{ github.workspace }}/${{ github.event.inputs.filename }}
+      shell: pwsh
