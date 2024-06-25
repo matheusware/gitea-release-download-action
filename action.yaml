@@ -29,6 +29,9 @@ outputs:
   file:
     description: "The downloaded file"
     value: ${{ steps.download.outputs.file }}
+  version:
+    description: "The version of the downloaded release"
+    value: ${{ steps.download.outputs.version }}
 runs:
   using: "composite"
   steps:
@@ -66,4 +69,5 @@ runs:
         echo "Downloading $downloadLink"
         Invoke-WebRequest -Uri $downloadLink -Headers @{ Authorization = "token ${{ inputs.token }}" } -OutFile "${{ github.workspace }}/${{ inputs.filename }}"
         echo "::set-output name=file::${{ github.workspace }}/${{ inputs.filename }}"
+        echo "::set-output name=version::$releaseTag"
       shell: pwsh
